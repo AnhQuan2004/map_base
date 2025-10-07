@@ -1,7 +1,9 @@
 import { Users } from "lucide-react";
+import { useUsers } from "@/hooks/use-users";
 
 export const ActiveUsersCard = () => {
-  const activeUsers = 1234;
+  const { data: apiResponse } = useUsers();
+  const activeUsers = apiResponse?.connections.length || 0;
 
   return (
     <div className="fixed bottom-6 left-6 z-40">

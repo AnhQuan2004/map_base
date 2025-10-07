@@ -1,22 +1,21 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-
-const users = [
-  { id: 1, coordinates: [100.9925, 15.8700], avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=1" },
-  { id: 2, coordinates: [101.5, 16.5], avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=2" },
-  { id: 3, coordinates: [102.0, 15.5], avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=3" },
-  { id: 4, coordinates: [100.0, 14.5], avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=4" },
-];
+import { useUsers } from '@/hooks/use-users';
+import { User } from '@/types';
+import { UserPopup } from './UserPopup';
 
 export const MapboxGlobe = () => {
+  const { data: apiResponse } = useUsers();
+  const users = apiResponse?.connections || [];
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const userInteracting = useRef(false);
   const spinEnabled = useRef(true);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
   useEffect(() => {
-    if (!mapContainer.current || map.current) return;
+    if (!mapContainer.current || map.current || !users.length) return;
 
     mapboxgl.accessToken = 'pk.eyJ1IjoiamFzb25nMDMiLCJhIjoiY21nZGR2dnp0MW9lMTJycHl0bDgwb2M0dyJ9.ktCzP9_99FM9DqR-tbNvYg';
     
@@ -32,11 +31,11 @@ export const MapboxGlobe = () => {
       if (!map.current) return;
 
       map.current.setFog({
-        range: [-1, 2],
-        'horizon-blend': 0.3,
-        color: '#242B4B',
-        'high-color': '#161B36',
+        range: [0.8, 8],
+        color: '#aaccff',
+        'high-color': '#ffffff',
         'space-color': '#0B1026',
+        'horizon-blend': 0.2,
         'star-intensity': 0.8,
       } as any);
 
@@ -48,24 +47,64 @@ export const MapboxGlobe = () => {
             type: 'Feature',
             geometry: {
               type: 'Point',
-              coordinates: user.coordinates,
+              coordinates: user.location,
             },
             properties: {
-              id: user.id,
+              id: user._id,
             },
           })),
+        },
+        cluster: true,
+        clusterMaxZoom: 14,
+        clusterRadius: 50,
+      });
+
+      map.current.addLayer({
+        id: 'clusters',
+        type: 'circle',
+        source: 'users',
+        filter: ['has', 'point_count'],
+        paint: {
+          'circle-color': [
+            'step',
+            ['get', 'point_count'],
+            '#51bbd6',
+            100,
+            '#f1f075',
+            750,
+            '#f28cb1',
+          ],
+          'circle-radius': [
+            'step',
+            ['get', 'point_count'],
+            20,
+            100,
+            30,
+            750,
+            40,
+          ],
         },
       });
 
       map.current.addLayer({
-        id: 'user-dots',
+        id: 'cluster-count',
+        type: 'symbol',
+        source: 'users',
+        filter: ['has', 'point_count'],
+        layout: {
+          'text-field': '{point_count_abbreviated}',
+          'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
+          'text-size': 12,
+        },
+      });
+
+      map.current.addLayer({
+        id: 'unclustered-point',
         type: 'circle',
         source: 'users',
+        filter: ['!', ['has', 'point_count']],
         paint: {
-          'circle-radius': 6,
-          'circle-color': '#FFFFFF',
-          'circle-stroke-width': 2,
-          'circle-stroke-color': '#000000',
+          'circle-radius': 0,
         },
       });
 
@@ -76,43 +115,52 @@ export const MapboxGlobe = () => {
           width: 50px;
           height: 50px;
           border-radius: 50%;
-          background-image: url(${user.avatar});
+          background-image: url(${user.image_url});
           background-size: cover;
           background-position: center;
           border: 2px solid #fff;
           box-shadow: 0 0 10px rgba(0,0,0,0.5);
-          opacity: 0;
-          transition: opacity 0.3s ease-in-out;
         `;
-        el.id = `avatar-${user.id}`;
+        el.id = `avatar-${user._id}`;
 
-        new mapboxgl.Marker(el)
-          .setLngLat(user.coordinates as [number, number])
+        const marker = new mapboxgl.Marker(el)
+          .setLngLat(user.location as [number, number])
           .addTo(map.current!);
+
+        el.addEventListener('click', () => {
+          setSelectedUser(user);
+        });
       });
 
-      function updateMarkers() {
-        if (!map.current) return;
-        const zoom = map.current.getZoom();
-        
-        if (zoom >= 4) {
-          map.current.setLayoutProperty('user-dots', 'visibility', 'none');
-          document.querySelectorAll('.avatar-marker').forEach(marker => {
-            (marker as HTMLElement).style.opacity = '1';
-          });
-        } else {
-          map.current.setLayoutProperty('user-dots', 'visibility', 'visible');
-          document.querySelectorAll('.avatar-marker').forEach(marker => {
-            (marker as HTMLElement).style.opacity = '0';
-          });
-        }
-      }
+      map.current.on('click', 'clusters', (e) => {
+        if (!map.current || !e.features) return;
+        const features = map.current.queryRenderedFeatures(e.point, {
+          layers: ['clusters'],
+        });
+        const clusterId = features[0].properties?.cluster_id;
+        (map.current.getSource('users') as mapboxgl.GeoJSONSource).getClusterExpansionZoom(
+          clusterId,
+          (err, zoom) => {
+            if (err) return;
+            map.current?.easeTo({
+              center: (features[0].geometry as any).coordinates,
+              zoom: zoom,
+            });
+          }
+        );
+      });
 
-      map.current.on('zoom', updateMarkers);
-      updateMarkers();
+      map.current.on('mouseenter', 'clusters', () => {
+        if (!map.current) return;
+        map.current.getCanvas().style.cursor = 'pointer';
+      });
+      map.current.on('mouseleave', 'clusters', () => {
+        if (!map.current) return;
+        map.current.getCanvas().style.cursor = '';
+      });
 
       // Rotation animation
-      const secondsPerRevolution = 60;
+      const secondsPerRevolution = 240;
       const maxSpinZoom = 5;
       const slowSpinZoom = 3;
 
@@ -127,7 +175,7 @@ export const MapboxGlobe = () => {
             distancePerSecond *= zoomDif;
           }
           const center = map.current.getCenter();
-          center.lng -= distancePerSecond;
+          center.lng += distancePerSecond;
           map.current.easeTo({ center, duration: 1000, easing: (n) => n });
         }
       }
@@ -162,9 +210,12 @@ export const MapboxGlobe = () => {
     return () => {
       map.current?.remove();
     };
-  }, []);
+  }, [users]);
 
   return (
-    <div ref={mapContainer} className="absolute inset-0 w-full h-full [&_.mapboxgl-ctrl-attrib]:hidden" />
+    <>
+      <div ref={mapContainer} className="absolute inset-0 w-full h-full [&_.mapboxgl-ctrl-attrib]:hidden" />
+      {selectedUser && <UserPopup user={selectedUser} onClose={() => setSelectedUser(null)} />}
+    </>
   );
 };
