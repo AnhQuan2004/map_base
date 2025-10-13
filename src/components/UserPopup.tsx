@@ -1,13 +1,45 @@
-import { User } from "@/types";
+import { Builder } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useFriendManager } from "@/hooks/useFriendManager";
+import { useAccount } from "wagmi";
 
 interface UserPopupProps {
-  user: User;
+  user: Builder;
   onClose: () => void;
 }
 
 export const UserPopup = ({ user, onClose }: UserPopupProps) => {
+  const { requestFriend, isLoading } = useFriendManager();
+  const { address: account } = useAccount();
+
+  const handleAddFriend = async () => {
+    try {
+      const response = await fetch("https://devq-be0x7.site/networks/connect", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          targetBuilderId: user._id,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to get user address");
+      }
+
+      const data = await response.json();
+      const userAddress = data.address as `0x${string}`;
+
+      if (userAddress) {
+        requestFriend(userAddress);
+      }
+    } catch (error) {
+      console.error("Error adding friend:", error);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div className="relative bg-background border border-border rounded-2xl p-6 w-full max-w-md mx-4">
@@ -35,7 +67,9 @@ export const UserPopup = ({ user, onClose }: UserPopupProps) => {
         </div>
         <div className="flex gap-4">
           <Button className="flex-1">View Profile</Button>
-          <Button variant="outline" className="flex-1">Message</Button>
+          <Button variant="outline" className="flex-1" onClick={handleAddFriend} disabled={isLoading || !account}>
+            {isLoading ? "Sending..." : "Add Friend"}
+          </Button>
         </div>
       </div>
     </div>

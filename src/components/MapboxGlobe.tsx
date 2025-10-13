@@ -2,20 +2,60 @@ import { useEffect, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { useUsers } from '@/hooks/use-users';
-import { User } from '@/types';
+import { Builder } from '@/types';
 import { UserPopup } from './UserPopup';
 
-export const MapboxGlobe = () => {
+interface MapboxGlobeProps {
+  selectedBuilder: Builder | null;
+}
+
+export const MapboxGlobe = ({ selectedBuilder }: MapboxGlobeProps) => {
   const { data: apiResponse } = useUsers();
   const users = apiResponse?.connections || [];
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const userInteracting = useRef(false);
   const spinEnabled = useRef(true);
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [selectedUser, setSelectedUser] = useState<Builder | null>(null);
+  const markerRef = useRef<mapboxgl.Marker | null>(null);
 
   useEffect(() => {
-    if (!mapContainer.current || map.current || !users.length) return;
+    if (selectedBuilder && selectedBuilder.location && selectedBuilder.location.length === 2 && map.current) {
+      map.current.flyTo({
+        center: selectedBuilder.location,
+        zoom: 14,
+        essential: true,
+      });
+
+      if (markerRef.current) {
+        markerRef.current.remove();
+      }
+
+      const el = document.createElement('div');
+      el.className = 'avatar-marker';
+      el.style.cssText = `
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background-image: url(${selectedBuilder.image_url});
+        background-size: cover;
+        background-position: center;
+        border: 2px solid #fff;
+        box-shadow: 0 0 10px rgba(0,0,0,0.5);
+      `;
+
+      el.addEventListener('click', () => {
+        setSelectedUser(selectedBuilder);
+      });
+
+      markerRef.current = new mapboxgl.Marker(el)
+        .setLngLat(selectedBuilder.location)
+        .addTo(map.current);
+    }
+  }, [selectedBuilder]);
+
+  useEffect(() => {
+    if (!mapContainer.current || map.current) return;
 
     mapboxgl.accessToken = 'pk.eyJ1IjoiamFzb25nMDMiLCJhIjoiY21nZGR2dnp0MW9lMTJycHl0bDgwb2M0dyJ9.ktCzP9_99FM9DqR-tbNvYg';
     
@@ -210,7 +250,7 @@ export const MapboxGlobe = () => {
     return () => {
       map.current?.remove();
     };
-  }, [users]);
+  }, []);
 
   return (
     <>

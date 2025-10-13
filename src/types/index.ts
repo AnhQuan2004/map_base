@@ -1,4 +1,4 @@
-export interface User {
+export interface Builder {
   _id: string;
   name: string;
   bio: string | null;
@@ -25,5 +25,5 @@ export interface User {
 export interface ApiResponse {
   _id: string;
   builder: string;
-  connections: User[];
+  connections: Builder[];
 }
