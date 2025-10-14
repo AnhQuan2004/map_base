@@ -14,23 +14,38 @@ export const UserPopup = ({ user, onClose }: UserPopupProps) => {
   const { address: account } = useAccount();
 
   const handleAddFriend = async () => {
+    if (!account) {
+      console.error("Cannot add friend, wallet not connected.");
+      return;
+    }
+
+    console.log("Attempting to add friend. User object:", user);
+    console.log("Target Builder ID:", user._id);
+    console.log("My Address:", account);
+
+    const requestBody = {
+      targetBuilderId: user._id,
+    };
+
+    console.log("Request Body:", JSON.stringify(requestBody, null, 2));
+
     try {
       const response = await fetch("https://devq-be0x7.site/networks/connect", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          targetBuilderId: user._id,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
-        throw new Error("Failed to get user address");
+        const errorBody = await response.text();
+        console.error("API Error Response:", errorBody);
+        throw new Error(`Failed to get user address. Status: ${response.status}`);
       }
 
       const data = await response.json();
-      const userAddress = data.address as `0x${string}`;
+      const userAddress = data.targetBuilder.address as `0x${string}`;
 
       if (userAddress) {
         requestFriend(userAddress);
