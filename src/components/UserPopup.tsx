@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useFriendManager } from "@/hooks/useFriendManager";
 import { useAccount } from "wagmi";
+import { useEffect, useState } from "react";
 
 interface UserPopupProps {
   user: Builder;
@@ -10,8 +11,33 @@ interface UserPopupProps {
 }
 
 export const UserPopup = ({ user, onClose }: UserPopupProps) => {
-  const { requestFriend, isLoading } = useFriendManager();
+  const [friendAddress, setFriendAddress] = useState<`0x${string}` | undefined>();
+  const { requestFriend, isLoading, areFriends, isRequestPending, refetchStatus } = useFriendManager(friendAddress);
   const { address: account } = useAccount();
+
+  useEffect(() => {
+    const fetchUserAddress = async () => {
+      try {
+        const response = await fetch("https://devq-be0x7.site/networks/connect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ targetBuilderId: user._id }),
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setFriendAddress(data.targetBuilder.address);
+        }
+      } catch (error) {
+        console.error("Failed to fetch user address:", error);
+      }
+    };
+
+    fetchUserAddress();
+  }, [user._id]);
+
+  useEffect(() => {
+    refetchStatus();
+  }, [friendAddress, refetchStatus]);
 
   const handleAddFriend = async () => {
     if (!account) {
@@ -82,9 +108,15 @@ export const UserPopup = ({ user, onClose }: UserPopupProps) => {
         </div>
         <div className="flex gap-4">
           <Button className="flex-1">View Profile</Button>
-          <Button variant="outline" className="flex-1" onClick={handleAddFriend} disabled={isLoading || !account}>
-            {isLoading ? "Sending..." : "Add Friend"}
-          </Button>
+          {areFriends ? (
+            <Button variant="outline" className="flex-1" disabled>Friends</Button>
+          ) : isRequestPending ? (
+            <Button variant="outline" className="flex-1" disabled>Request Sent</Button>
+          ) : (
+            <Button variant="outline" className="flex-1" onClick={handleAddFriend} disabled={isLoading || !account || !friendAddress}>
+              {isLoading ? "Sending..." : "Add Friend"}
+            </Button>
+          )}
         </div>
       </div>
     </div>

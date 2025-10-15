@@ -1,7 +1,11 @@
-import { Globe } from "lucide-react";
+import { Globe, UserPlus, Users } from "lucide-react";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { Search } from "./Search";
 import { Builder } from "@/types";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { FriendRequests } from "./FriendRequests";
+import { FriendsList } from "./FriendsList";
+import { Button } from "./ui/button";
 
 interface NavigationProps {
   onSelect: (builder: Builder) => void;
@@ -25,8 +29,34 @@ export const Navigation = ({ onSelect }: NavigationProps) => {
           {/* Search */}
           <Search onSelect={onSelect} />
 
-          {/* Connect Wallet Button */}
-          <ConnectButton />
+          <div className="flex items-center gap-2">
+            {/* Friend Requests */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <UserPlus className="h-5 w-5" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent>
+                <FriendRequests />
+              </PopoverContent>
+            </Popover>
+
+            {/* Friends List */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <Users className="h-5 w-5" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent>
+                <FriendsList />
+              </PopoverContent>
+            </Popover>
+
+            {/* Connect Wallet Button */}
+            <ConnectButton />
+          </div>
         </div>
       </div>
     </nav>
